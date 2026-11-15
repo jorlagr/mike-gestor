@@ -18,6 +18,7 @@ Aplicación web adaptable para registrar ingresos y gastos de dos empresas, aloj
    - `VITE_SUPABASE_URL`: URL del proyecto Supabase.
    - `VITE_SUPABASE_ANON_KEY`: clave pública/anon del proyecto. **Nunca uses `service_role` en el navegador o GitHub Pages.**
 6. En **Settings → Pages**, elige **GitHub Actions** como fuente. El workflow de este repo compila y publica al hacer push a `main`. El enlace será `https://USUARIO.github.io/mike-gestor/`.
+7. En Supabase, abre **Authentication → URL Configuration** y configura **Site URL** como `https://USUARIO.github.io/mike-gestor/`. En **Redirect URLs**, añade `https://USUARIO.github.io/mike-gestor/**` (sustituye `USUARIO` por tu nombre de GitHub). Esto permite que los enlaces de recuperación vuelvan a la aplicación publicada, no a una dirección local.
 
 No se requiere un plan de pago para el despliegue base. La disponibilidad, límites y retención del plan gratuito dependen de las condiciones vigentes de GitHub y Supabase.
 

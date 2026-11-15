@@ -22,6 +22,7 @@ type Company = (typeof COMPANIES)[number]
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [recoveryMode, setRecoveryMode] = useState(() => new URLSearchParams(window.location.search).get('auth') === 'recovery')
   const [company, setCompany] = useState<Company | null>(null)
   const [movements, setMovements] = useState<Movement[]>([])
   const [dataLoading, setDataLoading] = useState(false)
@@ -46,7 +47,10 @@ export default function App() {
       setSession(data.session)
       setAuthLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession(nextSession)
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true)
+    })
     return () => listener.subscription.unsubscribe()
   }, [])
 
@@ -146,6 +150,10 @@ export default function App() {
 
   if (!isBackendConfigured) return <SetupScreen />
   if (authLoading) return <div className="loading-screen"><span className="spinner" />Cargando...</div>
+  if (recoveryMode) return <PasswordRecoveryScreen onComplete={() => {
+    setRecoveryMode(false)
+    window.history.replaceState({}, document.title, window.location.pathname)
+  }} />
   if (!session) return <LoginScreen initialError={error} />
 
   if (!company) return (
@@ -263,18 +271,55 @@ function MovementModal({ movement, onClose, onSave }: { movement: Movement | nul
 function LoginScreen({ initialError = '' }: { initialError?: string }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'login' | 'recovery-request'>('login')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(initialError)
+  const [notice, setNotice] = useState('')
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!supabase) return
     setLoading(true)
     setError('')
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
-    if (loginError) setError('No se pudo iniciar sesión. Comprueba el correo y la contraseña.')
+    setNotice('')
+    if (mode === 'login') {
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+      if (loginError) setError('No se pudo iniciar sesión. Comprueba que usas el correo y la contraseña del usuario de Authentication.')
+    } else {
+      const redirectUrl = new URL(window.location.href)
+      redirectUrl.search = ''
+      redirectUrl.hash = ''
+      redirectUrl.searchParams.set('auth', 'recovery')
+      const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl.toString() })
+      if (recoveryError) setError(`No se pudo solicitar la recuperación. ${recoveryError.message}`)
+      else setNotice('Si ese correo está asociado a una cuenta, recibirás un enlace para cambiar la contraseña.')
+    }
     setLoading(false)
   }
-  return <div className="auth-page"><div className="auth-card"><div className="brand auth-brand"><span className="brand-mark"><TrendingUp size={19} /></span><span>balance<span className="brand-period">.</span></span></div><span className="eyebrow">ACCESO PRIVADO</span><h1>Qué bueno verte.</h1><p>Inicia sesión para consultar tus empresas.</p><form onSubmit={submit}><label className="form-field">Correo electrónico<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@email.com" /></label><label className="form-field">Contraseña<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Tu contraseña" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-button save-button" disabled={loading}>{loading ? 'Entrando...' : 'Iniciar sesión'}</button></form><div className="auth-foot"><span className="lock-dot" /> Acceso restringido y conexión segura</div></div></div>
+  return <div className="auth-page"><div className="auth-card"><div className="brand auth-brand"><span className="brand-mark"><TrendingUp size={19} /></span><span>balance<span className="brand-period">.</span></span></div><span className="eyebrow">ACCESO PRIVADO</span><h1>{mode === 'login' ? 'Qué bueno verte.' : 'Recupera tu acceso.'}</h1><p>{mode === 'login' ? 'Inicia sesión para consultar tus empresas.' : 'Te enviaremos un enlace para cambiar tu contraseña.'}</p><form onSubmit={submit}><label className="form-field">Correo electrónico<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@email.com" /></label>{mode === 'login' && <label className="form-field">Contraseña<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Tu contraseña" /></label>}{error && <p className="form-error">{error}</p>}{notice && <p className="form-success" role="status">{notice}</p>}<button className="primary-button save-button" disabled={loading}>{loading ? 'Procesando...' : mode === 'login' ? 'Iniciar sesión' : 'Enviar enlace'}</button></form>{mode === 'login' ? <button type="button" className="auth-link" onClick={() => { setMode('recovery-request'); setError(''); setNotice('') }}>¿Olvidaste tu contraseña?</button> : <button type="button" className="auth-link" onClick={() => { setMode('login'); setError(''); setNotice('') }}>Volver al inicio de sesión</button>}<div className="auth-foot"><span className="lock-dot" /> Acceso restringido y conexión segura</div></div></div>
+}
+
+function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (!supabase) return
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden.')
+      return
+    }
+    setLoading(true)
+    setError('')
+    const { error: updateError } = await supabase.auth.updateUser({ password })
+    if (updateError) setError(updateError.message)
+    else onComplete()
+    setLoading(false)
+  }
+
+  return <div className="auth-page"><div className="auth-card"><div className="brand auth-brand"><span className="brand-mark"><TrendingUp size={19} /></span><span>balance<span className="brand-period">.</span></span></div><span className="eyebrow">RECUPERACIÓN DE CUENTA</span><h1>Elige una contraseña nueva.</h1><p>Usa al menos 6 caracteres.</p><form onSubmit={submit}><label className="form-field">Nueva contraseña<input type="password" autoComplete="new-password" minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} /></label><label className="form-field">Repite la contraseña<input type="password" autoComplete="new-password" minLength={6} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>{error && <p className="form-error">{error}</p>}<button className="primary-button save-button" disabled={loading}>{loading ? 'Guardando...' : 'Guardar contraseña'}</button></form><div className="auth-foot"><span className="lock-dot" /> Enlace de recuperación seguro</div></div></div>
 }
 
 function SetupScreen() {
