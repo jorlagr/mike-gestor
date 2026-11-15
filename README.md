@@ -8,14 +8,13 @@ Aplicación web adaptable para registrar ingresos y gastos de dos empresas, aloj
 2. Ejecuta el contenido de [`supabase/schema.sql`](./supabase/schema.sql). Crea tablas y políticas RLS; no crea movimientos ni ejemplos.
 3. En **Authentication → Users**, crea tu usuario con contraseña. Desactiva los registros públicos en **Authentication → Settings**.
 4. Copia el UUID de usuario y ejecuta en SQL Editor, sustituyendo `TU_UUID_DE_USUARIO` por el UUID real:
-
    ```sql
    insert into public.user_companies (user_id, company_id) values
      ('TU_UUID_DE_USUARIO', '00000000-0000-4000-8000-000000000001'),
      ('TU_UUID_DE_USUARIO', '00000000-0000-4000-8000-000000000002');
    ```
 
-5. En GitHub, publica esta carpeta en un repositorio llamado `mike-gestor` y configura en **Settings → Secrets and variables → Actions** estos secretos del repositorio:
+5. En **Settings → Environments → github-pages**, configura estos secretos del entorno:
    - `VITE_SUPABASE_URL`: URL del proyecto Supabase.
    - `VITE_SUPABASE_ANON_KEY`: clave pública/anon del proyecto. **Nunca uses `service_role` en el navegador o GitHub Pages.**
 6. En **Settings → Pages**, elige **GitHub Actions** como fuente. El workflow de este repo compila y publica al hacer push a `main`. El enlace será `https://USUARIO.github.io/mike-gestor/`.
